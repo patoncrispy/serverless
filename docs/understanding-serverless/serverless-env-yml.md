@@ -1,6 +1,6 @@
-# serverless.env.yaml
+# serverless.env.yml
 
-The `serverless.env.yaml` file includes environment specific configuration. This includes listing your stages and their
+The `serverless.env.yml` file includes environment specific configuration. This includes listing your stages and their
 regions. It also manages variables at 3 levels ordered by priority:
 
 1. Region Variables: For a specific region in a specific stage.
@@ -8,17 +8,17 @@ regions. It also manages variables at 3 levels ordered by priority:
 3. Common Variables: For all stages and regions.
 
 
-```yaml
+```yml
 vars:
-    someVar: 1
+  someVar: 1
 stages:
-    dev:
+  dev:
+    vars:
+      someVar: 2
+    regions:
+      us-east-1:
         vars:
-            someVar: 2
-        regions:
-            us-east-1:
-                vars:
-                  someVar: 3
+          someVar: 3
 ```
 
 Notice that you have the same variable defined in as common, stage and region variable. In that case the region variable

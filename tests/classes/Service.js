@@ -21,8 +21,7 @@ describe('Service', () => {
       const serviceInstance = new Service(serverless);
 
       expect(serviceInstance.service).to.be.equal(null);
-      expect(serviceInstance.provider).to.be.equal(null);
-      expect(serviceInstance.runtime).to.be.equal(null);
+      expect(serviceInstance.provider).to.deep.equal({});
       expect(serviceInstance.variableSyntax).to.be.equal(null);
       expect(serviceInstance.custom).to.deep.equal({});
       expect(serviceInstance.plugins).to.deep.equal([]);
@@ -36,7 +35,6 @@ describe('Service', () => {
       const data = {
         service: 'testService',
         provider: 'testProvider',
-        runtime: 'testRuntime',
         custom: {
           customProp: 'value',
         },
@@ -62,7 +60,6 @@ describe('Service', () => {
 
       expect(serviceInstance.service).to.be.equal('testService');
       expect(serviceInstance.provider).to.be.equal('testProvider');
-      expect(serviceInstance.runtime).to.be.equal('testRuntime');
       expect(serviceInstance.custom).to.deep.equal({ customProp: 'value' });
       expect(serviceInstance.plugins).to.deep.equal(['testPlugin']);
       expect(serviceInstance.functions).to.deep.equal({ functionA: {} });
@@ -73,6 +70,30 @@ describe('Service', () => {
       expect(serviceInstance.package.include[0]).to.equal('include-me.js');
       expect(serviceInstance.package.exclude[0]).to.equal('exclude-me.js');
       expect(serviceInstance.package.artifact).to.equal('some/path/foo.zip');
+    });
+
+    it('should support string based provider config', () => {
+      const data = {
+        provider: 'testProvider',
+      };
+
+      const serviceInstance = new Service(serverless, data);
+
+      expect(serviceInstance.provider).to.be.equal('testProvider');
+    });
+
+    it('should support object based provider config', () => {
+      const data = {
+        provider: {
+          name: 'testProvider',
+          runtime: 'nodejs4.3',
+        },
+      };
+
+      const serviceInstance = new Service(serverless, data);
+
+      expect(serviceInstance.provider.name).to.be.equal('testProvider');
+      expect(serviceInstance.provider.runtime).to.be.equal('nodejs4.3');
     });
   });
 
@@ -86,13 +107,94 @@ describe('Service', () => {
       return noService.load().then(() => done());
     });
 
-    it('should load and populate from filesystem', () => {
+    it('should support Serverless files with a .yaml extension', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
       const serverlessYaml = {
+        service: 'my-service',
+        provider: 'aws',
+        functions: {
+          functionA: {},
+        },
+      };
+      const serverlessEnvYaml = {
+        vars: {},
+        stages: {
+          dev: {
+            vars: {},
+            regions: {
+              'us-east-1': {
+                vars: {},
+              },
+            },
+          },
+        },
+      };
+
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
+        YAML.dump(serverlessYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
+        YAML.dump(serverlessEnvYaml));
+
+      const serverless = new Serverless({ servicePath: tmpDirPath });
+      serviceInstance = new Service(serverless);
+
+      return serviceInstance.load().then((loadedService) => {
+        expect(loadedService.service).to.be.equal('my-service');
+        expect(loadedService.provider).to.deep.equal({ name: 'aws' });
+        expect(loadedService.functions).to.deep.equal({ functionA: { events: [] } });
+        expect(serviceInstance.environment.stages.dev.regions['us-east-1'].vars)
+          .to.deep.equal({});
+      });
+    });
+
+    it('should support Serverless files with a .yml extension', () => {
+      const SUtils = new Utils();
+      const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
+      const serverlessYml = {
+        service: 'my-service',
+        provider: 'aws',
+        functions: {
+          functionA: {},
+        },
+      };
+      const serverlessEnvYml = {
+        vars: {},
+        stages: {
+          dev: {
+            vars: {},
+            regions: {
+              'us-east-1': {
+                vars: {},
+              },
+            },
+          },
+        },
+      };
+
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
+
+      const serverless = new Serverless({ servicePath: tmpDirPath });
+      serviceInstance = new Service(serverless);
+
+      return serviceInstance.load().then((loadedService) => {
+        expect(loadedService.service).to.be.equal('my-service');
+        expect(loadedService.provider).to.deep.equal({ name: 'aws' });
+        expect(loadedService.functions).to.deep.equal({ functionA: { events: [] } });
+        expect(serviceInstance.environment.stages.dev.regions['us-east-1'].vars)
+          .to.deep.equal({});
+      });
+    });
+
+    it('should load and populate from filesystem', () => {
+      const SUtils = new Utils();
+      const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
+      const serverlessYml = {
         service: '${testVar}',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         defaults: {
           stage: 'dev',
           region: 'us-east-1',
@@ -118,7 +220,7 @@ describe('Service', () => {
           artifact: 'some/path/foo.zip',
         },
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testVar: 'commonVar',
           testDigit: 10,
@@ -132,14 +234,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -151,8 +253,7 @@ describe('Service', () => {
       };
       return serviceInstance.load().then((loadedService) => {
         expect(loadedService.service).to.be.equal('commonVar');
-        expect(loadedService.provider).to.be.equal('aws');
-        expect(loadedService.runtime).to.be.equal('nodejs4.3');
+        expect(loadedService.provider).to.deep.equal({ name: 'aws' });
         expect(loadedService.plugins).to.deep.equal(['testPlugin']);
         expect(loadedService.environment.vars).to.deep.equal(commonVars);
         expect(serviceInstance.environment.stages.dev.regions['us-east-1'].vars)
@@ -171,13 +272,12 @@ describe('Service', () => {
     it('should load and populate stage vars', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: '${testVar}',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testVar: 'commonVar',
         },
@@ -191,14 +291,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -210,14 +310,13 @@ describe('Service', () => {
     it('should load and populate region vars', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: '${testVar}',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         plugins: ['testPlugin'],
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testVar: 'commonVar',
         },
@@ -231,16 +330,16 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {
           testVar: 'regionVar',
         },
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -253,16 +352,15 @@ describe('Service', () => {
     it('should load and populate non string variables', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           digit: '${testDigit}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testDigit: 10,
         },
@@ -274,14 +372,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -295,16 +393,15 @@ describe('Service', () => {
     it('should load and populate object variables', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           object: '${testObject}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testObject: {
             subProperty: 'test',
@@ -318,14 +415,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -339,16 +436,15 @@ describe('Service', () => {
     it('should load and populate object variables deep sub properties', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           object: '${testObject.subProperty.deepSubProperty}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testObject: {
             subProperty: {
@@ -364,14 +460,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -385,16 +481,15 @@ describe('Service', () => {
     it('should load and populate substring variables', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           substring: 'Hello ${testSubstring.subProperty.deepSubProperty}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testSubstring: {
             subProperty: {
@@ -410,14 +505,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -430,14 +525,13 @@ describe('Service', () => {
     it('should load and populate with custom variable syntax', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: '${{testVar}}',
         variableSyntax: '\\${{([\\s\\S]+?)}}',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testVar: 'commonVar',
         },
@@ -449,14 +543,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -467,15 +561,18 @@ describe('Service', () => {
       });
     });
 
-    it('should throw error if service property is missing', () => {
+    it('should load and add events property if no events provided', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
+        service: 'testService',
         provider: 'aws',
         runtime: 'nodejs4.3',
-        functions: {},
+        functions: {
+          functionA: {},
+        },
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {},
         stages: {
           dev: {
@@ -485,14 +582,47 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
+
+      const serverless = new Serverless({ servicePath: tmpDirPath });
+      serviceInstance = new Service(serverless);
+      return serviceInstance.load().then((loadedService) => {
+        expect(loadedService.functions).to.be.deep.equal({ functionA: { events: [] } });
+      });
+    });
+
+    it('should throw error if service property is missing', () => {
+      const SUtils = new Utils();
+      const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
+      const serverlessYml = {
+        provider: 'aws',
+        functions: {},
+      };
+      const serverlessEnvYml = {
+        vars: {},
+        stages: {
+          dev: {
+            vars: {},
+            regions: {},
+          },
+        },
+      };
+
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
+        vars: {},
+      };
+
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -509,12 +639,11 @@ describe('Service', () => {
     it('should throw error if provider property is missing', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
-        runtime: 'nodejs4.3',
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {},
         stages: {
           dev: {
@@ -524,14 +653,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -548,13 +677,12 @@ describe('Service', () => {
     it('should throw error if provider property is invalid', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'invalid',
-        runtime: 'nodejs4.3',
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {},
         stages: {
           dev: {
@@ -564,53 +692,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
-
-      const serverless = new Serverless({ servicePath: tmpDirPath });
-      serviceInstance = new Service(serverless);
-
-      return serviceInstance.load().then(() => {
-        // if we reach this, then no error was thrown as expected
-        // so make assertion fail intentionally to let us know something is wrong
-        expect(1).to.equal(2);
-      }).catch(e => {
-        expect(e.name).to.be.equal('ServerlessError');
-      });
-    });
-
-    it('should throw error if runtime property is missing', () => {
-      const SUtils = new Utils();
-      const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
-        service: 'service-name',
-        provider: 'aws',
-        functions: {},
-      };
-      const serverlessEnvYaml = {
-        vars: {},
-        stages: {
-          dev: {
-            vars: {},
-            regions: {},
-          },
-        },
-      };
-
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
-        vars: {},
-      };
-
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -627,12 +716,11 @@ describe('Service', () => {
     it('should throw error if functions property is missing', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
-        runtime: 'nodejs4.3',
         provider: 'aws',
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {},
         stages: {
           dev: {
@@ -642,14 +730,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -664,16 +752,15 @@ describe('Service', () => {
     it('should throw error if variable does not exist', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           object: '${testVar}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {},
         stages: {
           dev: {
@@ -683,14 +770,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -707,16 +794,15 @@ describe('Service', () => {
     it('should throw error if we try to access sub property of string variable', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           testVar: '${testVar.subProperty}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testVar: 'test',
         },
@@ -728,14 +814,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -752,16 +838,15 @@ describe('Service', () => {
     it('should throw error if we try to access sub property of non-object variable', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           testVar: '${testVar.subProperty}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testVar: 10,
         },
@@ -773,14 +858,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -797,16 +882,15 @@ describe('Service', () => {
     it('should throw error if sub property does not exist in object at any level', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           testObject: '${testObject.subProperty.deepSubProperty}',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testObject: {
             subProperty: 'string',
@@ -820,14 +904,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -844,16 +928,15 @@ describe('Service', () => {
     it('should throw error if trying to populate non string vars into string', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           testVar: '${testVar} String',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testVar: 10,
         },
@@ -865,14 +948,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);
@@ -889,16 +972,15 @@ describe('Service', () => {
     it('should throw error if trying to populate non string deep vars into string', () => {
       const SUtils = new Utils();
       const tmpDirPath = path.join(os.tmpdir(), (new Date).getTime().toString());
-      const serverlessYaml = {
+      const serverlessYml = {
         service: 'service-name',
         provider: 'aws',
-        runtime: 'nodejs4.3',
         custom: {
           testObject: '${testObject.subProperty} String',
         },
         functions: {},
       };
-      const serverlessEnvYaml = {
+      const serverlessEnvYml = {
         vars: {
           testObject: {
             subProperty: {
@@ -914,14 +996,14 @@ describe('Service', () => {
         },
       };
 
-      serverlessEnvYaml.stages.dev.regions['us-east-1'] = {
+      serverlessEnvYml.stages.dev.regions['us-east-1'] = {
         vars: {},
       };
 
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yaml'),
-        YAML.dump(serverlessYaml));
-      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yaml'),
-        YAML.dump(serverlessEnvYaml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.yml'),
+        YAML.dump(serverlessYml));
+      SUtils.writeFileSync(path.join(tmpDirPath, 'serverless.env.yml'),
+        YAML.dump(serverlessEnvYml));
 
       const serverless = new Serverless({ servicePath: tmpDirPath });
       serviceInstance = new Service(serverless);

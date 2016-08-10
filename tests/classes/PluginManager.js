@@ -250,9 +250,9 @@ describe('PluginManager', () => {
   });
 
   describe('#convertShortcutsIntoOptions()', () => {
-    it('should convert shortcuts into options when the command matches', () => {
+    it('should convert shortcuts into options when a one level deep command matches', () => {
       const cliOptionsMock = { r: 'eu-central-1', region: 'us-east-1' };
-      const cliCommandsMock = ['deploy'];
+      const cliCommandsMock = ['deploy']; // command with one level deepness
       const commandsMock = {
         deploy: {
           options: {
@@ -268,6 +268,30 @@ describe('PluginManager', () => {
       pluginManager.convertShortcutsIntoOptions(cliOptionsMock, commandsMock);
 
       expect(pluginManager.cliOptions.region).to.equal(cliOptionsMock.r);
+    });
+
+    it('should convert shortcuts into options when a two level deep command matches', () => {
+      const cliOptionsMock = { f: 'function-1', function: 'function-2' };
+      const cliCommandsMock = ['deploy', 'function']; // command with two level deepness
+      const commandsMock = {
+        deploy: {
+          commands: {
+            function: {
+              options: {
+                function: {
+                  shortcut: 'f',
+                },
+              },
+            },
+          },
+        },
+      };
+      pluginManager.setCliCommands(cliCommandsMock);
+      pluginManager.setCliOptions(cliOptionsMock);
+
+      pluginManager.convertShortcutsIntoOptions(cliOptionsMock, commandsMock);
+
+      expect(pluginManager.cliOptions.function).to.equal(cliOptionsMock.f);
     });
 
     it('should not convert shortcuts into options when the command does not match', () => {
@@ -410,7 +434,8 @@ describe('PluginManager', () => {
 
   describe('#loadCommands()', () => {
     it('should load the plugin commands', () => {
-      pluginManager.loadCommands(SynchronousPluginMock);
+      const synchronousPluginMockInstance = new SynchronousPluginMock();
+      pluginManager.loadCommands(synchronousPluginMockInstance);
 
       expect(pluginManager.commandsList[0]).to.have.property('deploy');
     });
@@ -418,7 +443,8 @@ describe('PluginManager', () => {
 
   describe('#getEvents()', () => {
     beforeEach(() => {
-      pluginManager.loadCommands(SynchronousPluginMock);
+      const synchronousPluginMockInstance = new SynchronousPluginMock();
+      pluginManager.loadCommands(synchronousPluginMockInstance);
     });
 
     it('should get all the matching events for a root level command in the correct order', () => {
@@ -661,9 +687,9 @@ describe('PluginManager', () => {
     execSync(`${serverlessExec} create --template aws-nodejs`);
 
     expect(serverlessInstance.utils
-      .fileExistsSync(path.join(tmpDir, 'serverless.yaml'))).to.equal(true);
+      .fileExistsSync(path.join(tmpDir, 'serverless.yml'))).to.equal(true);
     expect(serverlessInstance.utils
-      .fileExistsSync(path.join(tmpDir, 'serverless.env.yaml'))).to.equal(true);
+      .fileExistsSync(path.join(tmpDir, 'serverless.env.yml'))).to.equal(true);
     expect(serverlessInstance.utils
       .fileExistsSync(path.join(tmpDir, 'handler.js'))).to.equal(true);
 
